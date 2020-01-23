@@ -592,3 +592,5 @@ def capture_the_flag(url):
 ```
 
 Full exploit attached.
+
+Thanks @pimps and @jespinhara for reviewing my writeup.
