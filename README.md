@@ -107,7 +107,7 @@ name=manoelt&email=jobert%40mydocz.cosmic{{}}&username=manoelt&password=secretpa
 
 After this request we receive a nice QRCode with `jobert@mydocz.cosmic` in the e-mail address part and doing the recover process it led us to an Account Takeover. 
 
-![Jobert](images/jobert_profie.png)
+![Jobert](images/jobert_profile.png)
 
 We are now Jobert!
 
@@ -126,7 +126,7 @@ GET /support/chat?message=%3Cimg%20src=%22our_server%22%3E HTTP/1.1
 ```
 which returns a json and a new Set-Cookie header with more chars in the cookie. At the same time the browser (JS) inserts the HTML (here an image) and the GET response into the DOM:
 
-![Support](images/support_msg.png)
+![Support](images/support_img.png)
 
 We can easily identify the vulnerability here as `support.min.js` is doing:
 ```javascript
